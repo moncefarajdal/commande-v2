@@ -1,0 +1,19 @@
+1- Pour supprimer une commande on doit d'abord supprimer les paiements associes a cette commande
+en se basant sur la reference de cette commmande :
+    a- delete paiements by commande reference ==> Paiement Dao ::: deleteByCommandeReference(String reference)
+    b- delete commande by reference ==> Commande Dao ::: deleteByReference(String reference)
+
+2- Find method
+Using the reference of a command ==> List of payments associated to this command
+::: On raisone sur ce qu'on va supprimer ==> methode dans Paiement Dao
+
+3- Delete commande avec ses commandeItems est ses paiements
+    a- delete paiements     ==> paiementDao ::: deleteByCommandeReference
+    b- delete commandeItems ==> commandeItemDao ::: deleteByCommandeReference
+    c- delete commande      ==> commandeDao ::: deleteByReference
+
+4- Save commande avec ses paiements et ses commandeItems ???
+5- List<Commande> findByClientCin(cin)
+
+// On n'a pas besoin de preparer paiements car l'objet paiement ne contient pas des objet qu'on doit telecharger
+comme le cas des commandeItems
