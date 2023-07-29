@@ -1,0 +1,2 @@
+# curl -X GET http://localhost:8080/minio/list
+GET http://localhost:8080/minio//findAll/bucket/my-bucket
