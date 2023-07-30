@@ -2,9 +2,18 @@ package com.example.commandev2.ws;
 
 import com.example.commandev2.service.facade.MinIOService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.io.File;
+import java.io.IOException;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
 import java.util.List;
+
+//.\minio.exe server C:\minio --console-address :9090
+
 
 @RestController
 @RequestMapping("/minio")
@@ -38,4 +47,18 @@ public class MinioController {
         return minIOService.downloadAllDocumentsAsZip(bucket);
     }
 
+//  curl -X POST -F "folder=@/path/to/your/folder" -F "bucket=my-bucket" http://localhost:8080/minio/upload/folder
+//  curl -X POST -F "folder=@'./Figma'" -F "bucket=my-bucket" http://localhost:8080/minio/upload/folder
+
+    @PostMapping("/upload/folder/{bucket}")
+    public void uploadFolder(@RequestParam("folder") MultipartFile folder, @RequestParam("bucket") String bucket) throws IOException, NoSuchAlgorithmException, InvalidKeyException {
+        minIOService.uploadFolder(folder, bucket);
+    }
+
+//  curl -X POST -F "directory=@./Figma" http://localhost:8080/folder/upload/my-bucket
+    @PostMapping("/folder/upload/{bucket}")
+    public ResponseEntity<String> uploadToMinio(@RequestParam("directory") String directory, @PathVariable String bucket) {
+        File directoryToUpload = new File(directory);
+        return minIOService.uploadDirectoryToMinio(directoryToUpload, bucket);
+    }
 }
