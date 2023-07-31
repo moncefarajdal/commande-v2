@@ -1,6 +1,7 @@
 package com.example.commandev2.ws;
 
 import com.example.commandev2.service.facade.MinIOService;
+import io.minio.errors.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -47,18 +48,18 @@ public class MinioController {
         return minIOService.downloadAllDocumentsAsZip(bucket);
     }
 
-//  curl -X POST -F "folder=@/path/to/your/folder" -F "bucket=my-bucket" http://localhost:8080/minio/upload/folder
-//  curl -X POST -F "folder=@'./Figma'" -F "bucket=my-bucket" http://localhost:8080/minio/upload/folder
 
-    @PostMapping("/upload/folder/{bucket}")
-    public void uploadFolder(@RequestParam("folder") MultipartFile folder, @RequestParam("bucket") String bucket) throws IOException, NoSuchAlgorithmException, InvalidKeyException {
-        minIOService.uploadFolder(folder, bucket);
+    //  curl -o D:/GED/documents.zip http://localhost:8080/minio/download/files/bucket/bucket03/?files=file01.pdf,culture.pptx
+
+    @GetMapping("download/files/bucket/{bucket}")
+    public byte[] downloadDocumentsAsZip(@PathVariable String bucket, @RequestParam("files") List<String> filenames) {
+        return minIOService.downloadDocumentsAsZip(bucket, filenames);
     }
 
-//  curl -X POST -F "directory=@./Figma" http://localhost:8080/folder/upload/my-bucket
-    @PostMapping("/folder/upload/{bucket}")
-    public ResponseEntity<String> uploadToMinio(@RequestParam("directory") String directory, @PathVariable String bucket) {
-        File directoryToUpload = new File(directory);
-        return minIOService.uploadDirectoryToMinio(directoryToUpload, bucket);
+    //  curl -X POST -F "path=@D:/GED/Figma" http://localhost:8080/upload/folder/bucket/bucket03
+    //  curl -X POST --data-binary "@D:/GED/Figma" http://localhost:8080/upload/folder/bucket/bucket03
+    @PostMapping("upload/folder/bucket/{bucket}")
+    public void uploadDirectoryToBucket(@PathVariable String bucket, @RequestParam String directoryPath) throws IOException {
+        minIOService.uploadDirectoryToBucket(bucket, directoryPath);
     }
 }

@@ -4,10 +4,7 @@ import com.example.commandev2.service.facade.MinIOService;
 import io.minio.*;
 import io.minio.errors.*;
 import io.minio.messages.Item;
-import org.apache.commons.io.FileUtils;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -17,6 +14,7 @@ import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -158,109 +156,108 @@ public class MinIOServiceImpl implements MinIOService {
     // Create download files method here
 
     @Override
-    public void uploadFolder(MultipartFile folder, String bucket) throws IOException, NoSuchAlgorithmException, InvalidKeyException {
-        // Create a temporary directory to extract the folder content.
-        File tempDirectory = new File(System.getProperty("java.io.tmpdir"), folder.getOriginalFilename());
-        tempDirectory.mkdirs();
+    public byte[] downloadDocumentsAsZip(String bucket, List<String> filenames) {
+        if (bucketExists(bucket) != 1) return null;
+        else {
+            try {
+                // Create a byte array output stream to hold the zip data
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                ZipOutputStream zipOut = new ZipOutputStream(baos);
 
-        try {
-            // Extract the folder content to the temporary directory.
-            FileUtils.copyInputStreamToFile(folder.getInputStream(), tempDirectory);
+                // Buffer for reading data
+                byte[] buffer = new byte[8192];
 
-            // Upload the folder and its content to the MinIO bucket.
-            uploadFilesInDirectory(tempDirectory, "", bucket);
-        } finally {
-            // Delete the temporary directory and its content after uploading.
-            FileUtils.deleteDirectory(tempDirectory);
-        }
-    }
+                // Loop through each provided document name and add it to the zip
+                for (String documentName : filenames) {
+                    // Get the document object from MinIO
+                    GetObjectResponse response = minioClient.getObject(
+                            GetObjectArgs.builder()
+                                    .bucket(bucket)
+                                    .object(documentName)
+                                    .build()
+                    );
 
-    private void uploadFilesInDirectory(File directory, String objectPrefix, String bucketName) throws IOException, NoSuchAlgorithmException, InvalidKeyException {
-        for (File file : directory.listFiles()) {
-            if (file.isDirectory()) {
-                // Recursively upload subdirectories.
-                uploadFilesInDirectory(file, objectPrefix + file.getName() + "/", bucketName);
-            } else {
-                // Upload individual files.
-                String objectName = objectPrefix + file.getName();
-                try (InputStream inputStream = Files.newInputStream(file.toPath())) {
-                    minioClient.putObject(PutObjectArgs.builder()
-                            .bucket(bucketName)
-                            .object(objectName)
-                            .stream(inputStream, file.length(), -1)
-                            .build());
-                } catch (io.minio.errors.MinioException e) {
-                    // Handle MinIO-specific exceptions here.
-                    e.printStackTrace();
-                    // Handle the exception as per your application's requirements (e.g., log it, return an error response, etc.).
-                    // You can also throw a custom exception or return a specific error message if needed.
-                    throw new IOException("Error uploading file to MinIO: " + e.getMessage());
-                } catch (IOException | InvalidKeyException | NoSuchAlgorithmException e) {
-                    // Handle other IO-related exceptions (e.g., if there's an error reading the file).
-                    e.printStackTrace();
-                    throw e;
+                    // Get the input stream containing the document data
+                    InputStream documentStream = response;
+
+                    // Create a new entry in the zip for the document
+                    ZipEntry zipEntry = new ZipEntry(documentName);
+                    zipOut.putNextEntry(zipEntry);
+
+                    // Write the document data to the zip
+                    int bytesRead;
+                    while ((bytesRead = documentStream.read(buffer)) != -1) {
+                        zipOut.write(buffer, 0, bytesRead);
+                    }
+
+                    // Close the entry for the document
+                    zipOut.closeEntry();
+
+                    // Close the input stream for the current document
+                    documentStream.close();
                 }
+
+                // Close the zip output stream
+                zipOut.close();
+
+                // Return the zip data as a byte array
+                return baos.toByteArray();
+
+            } catch (Exception e) {
+                e.printStackTrace();
             }
+            return null;
         }
     }
+
+    // Upload directory here
 
     @Override
-    public ResponseEntity<String> uploadDirectoryToMinio(File directory, String bucketName) {
-        if (!directory.exists() || !directory.isDirectory()) {
-            return ResponseEntity.badRequest().body("Invalid directory path or directory does not exist.");
-        }
-
+    public void uploadDirectoryToBucket(String bucketName, String directoryPath) throws IOException {
         try {
-            uploadDirectoryContents(directory, bucketName);
-            return ResponseEntity.ok("Directory uploaded successfully to MinIO.");
-        } catch (Exception e) {
+            File directory = new File(directoryPath);
+            if (!directory.exists() || !directory.isDirectory()) {
+                throw new IllegalArgumentException("The provided path is not a valid directory.");
+            }
+            uploadDirectoryContents(bucketName, directory, "");
+        } catch (IOException e) {
             e.printStackTrace();
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error uploading directory to MinIO.");
+            throw new IOException("Failed to upload file to MinIO: " + e.getMessage(), e);
         }
     }
 
-    private void uploadDirectoryContents(File directory, String bucketName) throws IOException,
-            InvalidKeyException, NoSuchAlgorithmException {
-        File[] files = directory.listFiles();
-        if (files == null) {
-            return;
-        }
-
-        for (File file : files) {
+    private void uploadDirectoryContents(String bucketName, File directory, String prefix) throws IOException {
+        for (File file : Objects.requireNonNull(directory.listFiles())) {
             if (file.isDirectory()) {
-                uploadDirectoryContents(file, bucketName); // Recursively upload subdirectories.
+                uploadDirectoryContents(bucketName, file, prefix + file.getName() + "/");
             } else {
-                uploadFileToMinio(file, bucketName); // Upload individual files.
+                String objectName = prefix + file.getName();
+                uploadFileToBucket(bucketName, objectName, file);
             }
         }
     }
 
-    private void uploadFileToMinio(File file, String bucketName) throws IOException,
-            InvalidKeyException, NoSuchAlgorithmException {
-        String objectName = file.getAbsolutePath().replace("\\", "/");
+    private void uploadFileToBucket(String bucketName, String objectName, File file) throws IOException {
+        try {
+            PutObjectArgs args = PutObjectArgs.builder()
+                    .bucket(bucketName)
+                    .object(objectName)
+                    .stream(Files.newInputStream(file.toPath()), file.length(), -1)
+                    .contentType(Files.probeContentType(file.toPath()))
+                    .build();
 
-        try (FileInputStream fis = new FileInputStream(file)) {
-            minioClient.putObject(
-                    PutObjectArgs.builder()
-                            .bucket(bucketName)
-                            .object(objectName)
-                            .stream(fis, fis.available(), -1)
-                            .build());
-        } catch (ServerException e) {
+            minioClient.putObject(args);
+        } catch (ErrorResponseException | InsufficientDataException | InternalException | InvalidResponseException |
+                NoSuchAlgorithmException | ServerException | XmlParserException e) {
             e.printStackTrace();
-        } catch (InsufficientDataException e) {
+            throw new IOException("Failed to upload file to MinIO: " + e.getMessage(), e);
+        } catch (InvalidKeyException e) {
             e.printStackTrace();
-        } catch (ErrorResponseException e) {
+            throw new IOException("Invalid credentials for MinIO: " + e.getMessage(), e);
+        } catch (IOException e) {
             e.printStackTrace();
-        } catch (InvalidResponseException e) {
-            e.printStackTrace();
-        } catch (XmlParserException e) {
-            e.printStackTrace();
-        } catch (InternalException e) {
-            e.printStackTrace();
+            throw new IOException("Failed to upload file to MinIO: " + e.getMessage(), e);
         }
-
-        System.out.println("Uploaded " + objectName + " to MinIO.");
     }
 
     @Autowired

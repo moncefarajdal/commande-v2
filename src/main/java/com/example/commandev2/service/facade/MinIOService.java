@@ -21,7 +21,7 @@ public interface MinIOService {
 
     byte[] downloadAllDocumentsAsZip(String bucket);
 
-    void uploadFolder(MultipartFile folder, String bucket) throws IOException, NoSuchAlgorithmException, InvalidKeyException;
+    byte[] downloadDocumentsAsZip(String bucket, List<String> filenames);
 
-    ResponseEntity<String> uploadDirectoryToMinio(File directory, String bucketName);
+    void uploadDirectoryToBucket(String bucketName, String directoryPath) throws IOException;
 }
