@@ -34,7 +34,6 @@ public class MinIOServiceImpl implements MinIOService {
 
     @Override
     public int upload(MultipartFile file, String bucket) {
-
         if (bucketExists(bucket) != 1) {
             return 0;
         } else {
@@ -213,50 +212,48 @@ public class MinIOServiceImpl implements MinIOService {
     // Upload directory here
 
     @Override
-    public void uploadDirectoryToBucket(String bucketName, String directoryPath) throws IOException {
-        try {
-            File directory = new File(directoryPath);
-            if (!directory.exists() || !directory.isDirectory()) {
-                throw new IllegalArgumentException("The provided path is not a valid directory.");
-            }
-            uploadDirectoryContents(bucketName, directory, "");
-        } catch (IOException e) {
-            e.printStackTrace();
-            throw new IOException("Failed to upload file to MinIO: " + e.getMessage(), e);
+    public void uploadDirectory(String directoryPath, String bucket) throws IOException, NoSuchAlgorithmException, InvalidKeyException, MinioException {
+        File directory = new File(directoryPath);
+
+        if (!directory.exists() || !directory.isDirectory()) {
+            throw new IllegalArgumentException("The provided path is not a valid directory.");
         }
+        uploadFilesInDirectory(directory, "", bucket);
     }
 
-    private void uploadDirectoryContents(String bucketName, File directory, String prefix) throws IOException {
-        for (File file : Objects.requireNonNull(directory.listFiles())) {
-            if (file.isDirectory()) {
-                uploadDirectoryContents(bucketName, file, prefix + file.getName() + "/");
-            } else {
+    private void uploadFilesInDirectory(File directory, String prefix, String bucketName) throws IOException, NoSuchAlgorithmException, InvalidKeyException, MinioException {
+        File[] files = directory.listFiles();
+
+        if (files == null || files.length == 0) {
+            return;
+        }
+
+        for (File file : files) {
+            if (file.isFile()) {
                 String objectName = prefix + file.getName();
-                uploadFileToBucket(bucketName, objectName, file);
+                try {
+
+                    String contentType = Files.probeContentType(file.toPath());
+                    if (contentType == null) {
+                        contentType = "application/octet-stream"; // Set default content type if it cannot be determined
+                    }
+
+                    PutObjectArgs args = PutObjectArgs.builder()
+                            .bucket(bucketName)
+                            .object(objectName)
+                            .stream(Files.newInputStream(file.toPath()), file.length(), -1)
+//                            .contentType(Files.probeContentType(file.toPath()))
+                            .contentType(contentType)
+                            .build();
+                    minioClient.putObject(args);
+                    System.out.println("Uploaded " + file.getName() + " to MinIO bucket.");
+                } catch (MinioException e) {
+                    System.err.println("Error uploading " + file.getName() + " to MinIO bucket: " + e.getMessage());
+                }
+            } else if (file.isDirectory()) {
+                String subDirectoryPrefix = prefix + file.getName() + "/";
+                uploadFilesInDirectory(file, subDirectoryPrefix, bucketName);
             }
-        }
-    }
-
-    private void uploadFileToBucket(String bucketName, String objectName, File file) throws IOException {
-        try {
-            PutObjectArgs args = PutObjectArgs.builder()
-                    .bucket(bucketName)
-                    .object(objectName)
-                    .stream(Files.newInputStream(file.toPath()), file.length(), -1)
-                    .contentType(Files.probeContentType(file.toPath()))
-                    .build();
-
-            minioClient.putObject(args);
-        } catch (ErrorResponseException | InsufficientDataException | InternalException | InvalidResponseException |
-                NoSuchAlgorithmException | ServerException | XmlParserException e) {
-            e.printStackTrace();
-            throw new IOException("Failed to upload file to MinIO: " + e.getMessage(), e);
-        } catch (InvalidKeyException e) {
-            e.printStackTrace();
-            throw new IOException("Invalid credentials for MinIO: " + e.getMessage(), e);
-        } catch (IOException e) {
-            e.printStackTrace();
-            throw new IOException("Failed to upload file to MinIO: " + e.getMessage(), e);
         }
     }
 

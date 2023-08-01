@@ -15,7 +15,6 @@ import java.util.List;
 
 //.\minio.exe server C:\minio --console-address :9090
 
-
 @RestController
 @RequestMapping("/minio")
 public class MinioController {
@@ -48,18 +47,15 @@ public class MinioController {
         return minIOService.downloadAllDocumentsAsZip(bucket);
     }
 
-
     //  curl -o D:/GED/documents.zip http://localhost:8080/minio/download/files/bucket/bucket03/?files=file01.pdf,culture.pptx
-
-    @GetMapping("download/files/bucket/{bucket}")
+    @GetMapping("/download/files/bucket/{bucket}")
     public byte[] downloadDocumentsAsZip(@PathVariable String bucket, @RequestParam("files") List<String> filenames) {
         return minIOService.downloadDocumentsAsZip(bucket, filenames);
     }
 
-    //  curl -X POST -F "path=@D:/GED/Figma" http://localhost:8080/upload/folder/bucket/bucket03
-    //  curl -X POST --data-binary "@D:/GED/Figma" http://localhost:8080/upload/folder/bucket/bucket03
-    @PostMapping("upload/folder/bucket/{bucket}")
-    public void uploadDirectoryToBucket(@PathVariable String bucket, @RequestParam String directoryPath) throws IOException {
-        minIOService.uploadDirectoryToBucket(bucket, directoryPath);
+    //  curl -X POST -F "directoryPath=D:/GED/Figma" http://localhost:8080/minio/folder/bucket/bucket03
+    @PostMapping("/folder/bucket/{bucket}")
+    public void uploadDirectory(@RequestParam("directoryPath") String directoryPath, @PathVariable String bucket) throws IOException, NoSuchAlgorithmException, InvalidKeyException, MinioException {
+        minIOService.uploadDirectory(directoryPath, bucket);
     }
 }

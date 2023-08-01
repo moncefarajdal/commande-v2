@@ -1,5 +1,6 @@
 package com.example.commandev2.service.facade;
 
+import io.minio.errors.MinioException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -23,5 +24,5 @@ public interface MinIOService {
 
     byte[] downloadDocumentsAsZip(String bucket, List<String> filenames);
 
-    void uploadDirectoryToBucket(String bucketName, String directoryPath) throws IOException;
+    void uploadDirectory(String directoryPath, String bucket) throws IOException, NoSuchAlgorithmException, InvalidKeyException, MinioException;
 }
